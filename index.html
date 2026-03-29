@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coco's Collection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .page-transition { transition: opacity 0.3s ease; transition-property: opacity, transform; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .admin-badge { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.7rem; font-weight: bold; }
+        #auth-modal { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        .course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+        
+        /* Dropdown specific styles */
+        .term-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .term-content.open { max-height: 1000px; transition: max-height 0.5s ease-in; }
+        .chevron { transition: transform 0.3s ease; }
+        .chevron.rotate { transform: rotate(180deg); }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex flex-col min-h-screen">
+
+    <!-- SESSION BAR -->
+    <div class="bg-gray-900 text-white text-[10px] py-1 px-4 flex justify-between items-center uppercase tracking-widest">
+        <span>Portal Session: <span id="session-role-display" class="text-indigo-400 font-bold text-xs ml-2">Guest</span></span>
+        <div class="flex gap-4">
+            <button onclick="logout()" class="hover:text-white text-gray-400">Logout</button>
+            <button id="login-admin-btn" onclick="openAuthModal()" class="hover:text-white text-gray-400 font-bold underline">Faculty Login</button>
+        </div>
+    </div>
+
+    <!-- NAVIGATION -->
+    <nav class="bg-indigo-700 text-white shadow-lg">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="text-xl font-black tracking-tight cursor-pointer" onclick="router('home')">Coco's Collection</div>
+                <div id="admin-indicator" class="hidden"><span class="admin-badge">Coco's Part</span></div>
+            </div>
+            <div class="space-x-6 text-sm font-medium">
+                <button onclick="router('home')" class="hover:text-indigo-200 transition">Home</button>
+                <button onclick="router('courses')" class="hover:text-indigo-200 transition">Courses</button>
+                <button id="nav-admin" onclick="router('admin')" class="hidden hover:text-indigo-200 transition bg-indigo-800 px-4 py-1.5 rounded-full border border-indigo-400">Admin Uploads</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main id="app-root" class="flex-grow max-w-6xl mx-auto w-full p-6 page-transition opacity-100">
+        <!-- Content injected by JavaScript -->
+    </main>
+
+    <!-- AUTH MODAL -->
+    <div id="auth-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-8">
+            <h2 class="text-xl font-bold mb-4 text-center">Only For Coco😜</h2>
+            <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase">Admin Password</label>
+                    <input id="admin-password" type="password" required autofocus class="mt-1 block w-full rounded-md border p-3 outline-indigo-500" placeholder="admin123">
+                </div>
+                <div id="auth-error" class="hidden text-red-500 text-xs text-center font-bold">Incorrect faculty credentials.</div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeAuthModal()" class="flex-1 bg-gray-100 py-2 rounded-lg text-gray-600">Cancel</button>
+                    <button type="submit" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold">Verify</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-gray-800 text-gray-400 py-8 mt-12">
+        <div class="max-w-6xl mx-auto px-4 text-center">
+            <p id="footer-date" class="text-sm"></p>
+            <p class="mt-2 text-[10px] uppercase tracking-widest opacity-50">All Rights Reserved To the Authors of the Documents</p>
+        </div>
+    </footer>
+
+    <script>
+        // Simulated Database State
+        const mockDatabase = {
+            adminPass: "C0c0mel0n.",
+            courses: [
+                "Gross Anatomy", "Histology", "Embryology", "Biochemistry", "Therapeutics", "Pathology",
+                "Laboratory Science", "Public Health", "Clinical Science", "Diagnostics", "Society and Medicine"
+            ],
+            documents: {} 
+        };
+
+        // Initialize empty document structure
+        mockDatabase.courses.forEach((_, idx) => {
+            mockDatabase.documents[idx] = { 1: [], 2: [], 3: [] };
+        });
+
+        // Add dummy data
+        mockDatabase.documents[0][1].push({ 
+            title: "Intro to Anatomy", 
+            docLink: "#", 
+            quizLink: "#", 
+            videoLink: "#" 
+        });
+
+        let currentSession = { role: 'guest', lastPage: 'home' };
+
+        // --- CORE LOGIC ---
+
+        function router(page) {
+            currentSession.lastPage = page;
+            const root = document.getElementById('app-root');
+            
+            if (page === 'admin' && currentSession.role !== 'admin') {
+                renderError(root, "Access Restricted");
+                return;
+            }
+
+            root.classList.replace('opacity-100', 'opacity-0');
+            setTimeout(() => {
+                switch(page) {
+                    case 'home': renderHome(root); break;
+                    case 'courses': renderCourses(root); break;
+                    case 'admin': renderAdminPanel(root); break;
+                    default: renderHome(root);
+                }
+                root.classList.replace('opacity-0', 'opacity-100');
+            }, 150);
+        }
+
+        // --- UI HELPERS ---
+
+        function toggleTerm(courseIdx, term) {
+            const content = document.getElementById(`content-${courseIdx}-${term}`);
+            const chevron = document.getElementById(`chevron-${courseIdx}-${term}`);
+            const isOpen = content.classList.contains('open');
+            
+            // Close all other terms in this specific course card for accordion effect (optional)
+            // If you want them all to open independently, remove the lines below
+            [1, 2, 3].forEach(t => {
+                if (t !== term) {
+                    document.getElementById(`content-${courseIdx}-${t}`).classList.remove('open');
+                    document.getElementById(`chevron-${courseIdx}-${t}`).classList.remove('rotate');
+                }
+            });
+
+            content.classList.toggle('open');
+            chevron.classList.toggle('rotate');
+        }
+
+        // --- VIEW RENDERING ---
+
+        function renderHome(container) {
+            container.innerHTML = `
+                <div class="py-12 text-center space-y-8">
+                    <h1 class="text-5xl font-black text-gray-900 tracking-tighter">Academic Resource Portal</h1>
+                    <p class="text-xl text-gray-600 max-w-2xl mx-auto text-balance">Access your course documents, video lectures, and quizzes synced directly from our Faculty Google Drive.</p>
+                    <div class="flex justify-center gap-4">
+                        <button onclick="router('courses')" class="bg-indigo-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition">Browse Courses</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCourses(container) {
+            let html = `<h1 class="text-3xl font-bold mb-8">Available Courses</h1><div class="course-grid">`;
+            
+            mockDatabase.courses.forEach((course, idx) => {
+                html += `
+                    <div class="card border-t-4 border-indigo-600 overflow-hidden h-fit">
+                        <div class="p-5 border-b bg-indigo-50/30">
+                            <h2 class="text-xl font-bold text-indigo-900">${course}</h2>
+                        </div>
+                        <div class="p-2 space-y-1">
+                            ${[1, 2, 3].map(term => {
+                                const docs = mockDatabase.documents[idx][term];
+                                return `
+                                <div class="border rounded-lg overflow-hidden border-gray-100">
+                                    <!-- Dropdown Trigger -->
+                                    <button onclick="toggleTerm(${idx}, ${term})" 
+                                            class="w-full flex justify-between items-center p-3 text-left hover:bg-gray-50 transition active:bg-gray-100">
+                                        <span class="text-xs font-black text-gray-600 uppercase tracking-widest">Term ${term}</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-600 font-bold">${docs.length}</span>
+                                            <svg id="chevron-${idx}-${term}" class="chevron w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path d="M19 9l-7 7-7-7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+                                            </svg>
+                                        </div>
+                                    </button>
+                                    
+                                    <!-- Dropdown Content -->
+                                    <div id="content-${idx}-${term}" class="term-content">
+                                        <div class="p-3 pt-0 space-y-3">
+                                            ${docs.length > 0 
+                                                ? docs.map(doc => `
+                                                    <div class="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                                        <div class="font-bold text-xs text-gray-800 mb-2 flex items-center gap-2">
+                                                            <svg class="w-3.5 h-3.5 text-indigo-500" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                                                            ${doc.title}
+                                                        </div>
+                                                        <div class="grid grid-cols-1 gap-1.5">
+                                                            <a href="${doc.docLink}" target="_blank" class="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
+                                                                View Document
+                                                            </a>
+                                                            <div class="grid grid-cols-2 gap-1.5">
+                                                                <a href="${doc.videoLink}" target="_blank" class="bg-red-50 text-red-600 text-[10px] font-bold py-1.5 rounded text-center hover:bg-red-100 transition border border-red-100">
+                                                                    Video
+                                                                </a>
+                                                                <a href="${doc.quizLink}" target="_blank" class="bg-green-50 text-green-600 text-[10px] font-bold py-1.5 rounded text-center hover:bg-green-100 transition border border-green-100">
+                                                                    Quiz
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `).join('')
+                                                : '<p class="text-[10px] text-gray-400 italic text-center py-4">Resources pending upload for this term.</p>'
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            `}).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        function renderAdminPanel(container) {
+            container.innerHTML = `
+                <div class="grid lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1">
+                        <div class="card p-6 sticky top-6">
+                            <h2 class="text-xl font-bold mb-6">Faculty Content Upload</h2>
+                            <form onsubmit="handleUpload(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase">Select Course</label>
+                                    <select id="up-course" class="w-full mt-1 border p-2 rounded text-sm bg-white">
+                                        ${mockDatabase.courses.map((c, i) => `<option value="${i}">${c}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase">Academic Term</label>
+                                    <select id="up-term" class="w-full mt-1 border p-2 rounded text-sm bg-white">
+                                        <option value="1">Term 1</option>
+                                        <option value="2">Term 2</option>
+                                        <option value="3">Term 3</option>
+                                    </select>
+                                </div>
+                                <hr class="my-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase">Module Title</label>
+                                    <input id="up-title" type="text" required class="w-full mt-1 border p-2 rounded text-sm" placeholder="e.g. Intro to Quantum Mechanics">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase">Document Link</label>
+                                    <input id="up-doc-link" type="url" required class="w-full mt-1 border p-2 rounded text-sm" placeholder="https://drive.google.com/file/...">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase">Video Link</label>
+                                    <input id="up-video-link" type="url" required class="w-full mt-1 border p-2 rounded text-sm" placeholder="https://drive.google.com/video/...">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase">Quiz Link</label>
+                                    <input id="up-quiz-link" type="url" required class="w-full mt-1 border p-2 rounded text-sm" placeholder="https://docs.google.com/forms/...">
+                                </div>
+                                <button type="submit" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-indigo-700 transition">Publish Module</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-xl font-bold">Manage Published Resources</h2>
+                            <span class="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold uppercase tracking-wider">Live View Sync</span>
+                        </div>
+                        <div id="admin-doc-list" class="space-y-3">
+                            ${renderAdminDocList()}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAdminDocList() {
+            let list = [];
+            Object.keys(mockDatabase.documents).forEach(courseIdx => {
+                [1, 2, 3].forEach(term => {
+                    mockDatabase.documents[courseIdx][term].forEach((doc, docIdx) => {
+                        list.push(`
+                            <div class="card p-4 flex justify-between items-start border-l-4 border-emerald-400">
+                                <div class="space-y-1">
+                                    <span class="text-[9px] font-black text-indigo-500 uppercase tracking-tighter">${mockDatabase.courses[courseIdx]} • Term ${term}</span>
+                                    <h4 class="font-bold text-gray-800">${doc.title}</h4>
+                                    <div class="flex flex-wrap gap-2 pt-1">
+                                        <span class="text-[9px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">📄 Doc Attached</span>
+                                        <span class="text-[9px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">🎬 Video Linked</span>
+                                        <span class="text-[9px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">📝 Quiz Live</span>
+                                    </div>
+                                </div>
+                                <button onclick="deleteDoc(${courseIdx}, ${term}, ${docIdx})" class="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                                </button>
+                            </div>
+                        `);
+                    });
+                });
+            });
+            return list.length ? list.join('') : '<div class="card p-12 text-center text-gray-400 italic">No resources currently live on the student portal.</div>';
+        }
+
+        // --- ACTIONS ---
+
+        function handleUpload(e) {
+            e.preventDefault();
+            const courseIdx = document.getElementById('up-course').value;
+            const term = document.getElementById('up-term').value;
+            const title = document.getElementById('up-title').value;
+            const docLink = document.getElementById('up-doc-link').value;
+            const videoLink = document.getElementById('up-video-link').value;
+            const quizLink = document.getElementById('up-quiz-link').value;
+
+            mockDatabase.documents[courseIdx][term].push({ title, docLink, videoLink, quizLink });
+            
+            document.getElementById('admin-doc-list').innerHTML = renderAdminDocList();
+            e.target.reset();
+        }
+
+        function deleteDoc(cIdx, term, dIdx) {
+            mockDatabase.documents[cIdx][term].splice(dIdx, 1);
+            document.getElementById('admin-doc-list').innerHTML = renderAdminDocList();
+        }
+
+        function handleAuthSubmit(e) {
+            e.preventDefault();
+            const pass = document.getElementById('admin-password').value;
+            if (pass === mockDatabase.adminPass) {
+                setRole('admin');
+                closeAuthModal();
+                router('admin');
+            } else {
+                document.getElementById('auth-error').classList.remove('hidden');
+            }
+        }
+
+        function setRole(role) {
+            currentSession.role = role;
+            document.getElementById('session-role-display').innerText = role === 'admin' ? 'Faculty Administrator' : 'Student Guest';
+            document.getElementById('admin-indicator').classList.toggle('hidden', role !== 'admin');
+            document.getElementById('nav-admin').classList.toggle('hidden', role !== 'admin');
+            document.getElementById('login-admin-btn').classList.toggle('hidden', role === 'admin');
+        }
+
+        function logout() { setRole('guest'); router('home'); }
+        function openAuthModal() { 
+            document.getElementById('auth-error').classList.add('hidden');
+            document.getElementById('admin-password').value = "";
+            document.getElementById('auth-modal').classList.remove('hidden'); 
+        }
+        function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
+        function renderError(c, t) { c.innerHTML = `<div class="text-center py-20"><h1 class="text-4xl font-bold text-red-600">${t}</h1><button onclick="router('home')" class="mt-4 text-indigo-600">Return Home</button></div>`; }
+
+        window.onload = () => {
+            router('home');
+            document.getElementById('footer-date').innerText = `© ${new Date().getFullYear()} Academic Resource Network`;
+        };
+    </script>
+</body>
+</html>
